@@ -2,7 +2,7 @@
 
 A Streamlit-based application that analyzes multiple CV/resume documents against user-defined criteria, providing detailed feedback and comparison tools for recruitment processes.
 
-![CV Analysis Tool](https://via.placeholder.com/800x400?text=CV+Analysis+Tool)
+![CV Analysis Tool](images/homepage.png)
 
 ## Overview
 
@@ -61,6 +61,17 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
    streamlit run app.py
    ```
 
+   Or use the provided startup scripts:
+
+   ```bash
+   # On Linux/macOS
+   chmod +x start_app.sh
+   ./start_app.sh
+
+   # On Windows
+   start_app.bat
+   ```
+
 5. **Access the application**
 
    Open your browser and navigate to `http://localhost:8501`
@@ -82,6 +93,8 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
 - **db.json**: Mock database file for simulating API responses during development
 - **requirements.txt**: Python dependencies for the project
 - **.gitignore**: Specifies files to exclude from version control
+- **start_app.sh**: Bash script to start both the JSON server and Streamlit app
+- **start_app.bat**: Windows batch file to start both the JSON server and Streamlit app
 
 ### Component Breakdown
 
@@ -110,6 +123,35 @@ The application is divided into:
 - Summary table for at-a-glance comparison
 - Feedback mechanisms for continuous improvement
 
+## Testing
+
+The application includes a comprehensive test suite that ensures all components work correctly:
+
+- **Unit Tests**: Test individual functions and classes in isolation
+
+  - `test_api_client.py`: Tests the API client functionality
+  - `test_text_extraction.py`: Tests document text extraction functions
+  - `test_ui_components.py`: Tests UI components and interactions
+
+- **Integration Tests**: Test how components work together
+  - `test_app_flow.py`: Tests the end-to-end application flow
+
+To run the tests:
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test modules
+pytest tests/test_api_client.py
+pytest tests/test_text_extraction.py
+pytest tests/test_ui_components.py
+pytest tests/integration/test_app_flow.py
+
+# Run tests with coverage report
+pytest --cov=app
+```
+
 ## API Integration
 
 The application interacts with the following API endpoints:
@@ -126,3 +168,4 @@ During development, these endpoints are mocked via json-server using the provide
 - Extend `extract_text_from_file()` to support additional document formats
 - Adjust the UI layout by modifying the Streamlit component structure
 - Enhance visualization options in the individual analysis tabs
+- Implement robust error handling in the APIClient class for improved reliability
