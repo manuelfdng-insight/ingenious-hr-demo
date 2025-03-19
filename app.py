@@ -11,6 +11,7 @@ import pypdf
 import base64
 from typing import List, Dict, Any, Tuple, Optional
 from dotenv import load_dotenv
+import re
 
 # Load environment variables
 load_dotenv()
@@ -285,32 +286,13 @@ def main():
                     # Analysis result
                     st.markdown("### Analysis")
 
-                    # Format the response to extract the relevant summary
-                    try:
-                        # Try to parse the response as JSON if it's in that format
-                        import json
-                        try:
-                            response_data = json.loads(result["Analysis"])
-                            # Look for the summary section which contains the evaluation report
-                            formatted_analysis = ""
-                            for item in response_data:
-                                if "chat_name" in item.get("dict", {}) and item["dict"]["chat_name"] == "summary":
-                                    content = item["dict"]["chat_response"]["chat_message"]["dict"]["content"]
-                                    formatted_analysis = content
-                                    break
+                    import json
 
-                            if not formatted_analysis:
-                                # If we couldn't find the summary section, just use the raw response
-                                formatted_analysis = result["Analysis"]
-                        except json.JSONDecodeError:
-                            # If it's not valid JSON, use the raw text
-                            formatted_analysis = result["Analysis"]
-                    except Exception as e:
-                        # If any error occurs, fall back to the raw text
-                        formatted_analysis = result["Analysis"]
-
-                    # Display the formatted analysis
-                    st.markdown(formatted_analysis)
+                    for header in json.loads(result["Analysis"]):
+                        text = header.get('__dict__').get('chat_name')
+                        st.markdown(f'#### {text}')
+                        st.markdown(header.get('__dict__').get('chat_response').get(
+                            'chat_message').get('__dict__').get('content'))
 
                     # Feedback buttons
                     col1, col2 = st.columns(2)
@@ -333,132 +315,12 @@ def main():
                             st.success(
                                 "Thank you for your feedback. We'll improve our analysis.")
 
-                    # Match score visualization
-                    try:
-                        # Try to extract a score if present in the analysis text
-                        import re
-                        overall_score_matches = re.findall(
-                            r'(\d+)/(\d+)', formatted_analysis)
-                        skill_scores = re.findall(
-                            r'(\w+(\s+\w+)*)\s*\|\s*(\d+)\s*\|', formatted_analysis)
-
-                        if overall_score_matches:
-                            # Use the first match as the overall score
-                            score_numerator = int(overall_score_matches[0][0])
-                            score_denominator = int(
-                                overall_score_matches[0][1])
-                            score_percentage = int(
-                                (score_numerator / score_denominator) * 100)
-                            st.metric("Match Score", f"{score_percentage}%")
-
-                            # Visual representation
-                            st.progress(score_percentage/100)
-                        elif skill_scores:
-                            # Calculate average score from skill scores (assuming 1-5 scale)
-                            total = 0
-                            count = 0
-                            for skill_match in skill_scores:
-                                if len(skill_match) >= 3 and skill_match[2].isdigit():
-                                    total += int(skill_match[2])
-                                    count += 1
-
-                            if count > 0:
-                                avg_score = total / count
-                                # Normalize to percentage (assuming 5 is max)
-                                normalized_score = int((avg_score / 5) * 100)
-                                st.metric("Average Skill Score",
-                                          f"{normalized_score}%")
-
-                                # Visual representation
-                                st.progress(normalized_score/100)
-                    except Exception as e:
-                        # If we can't extract a score, don't show anything
-                        pass
-
-            # Show summary as a table
-            st.header("Summary")
-
-            # Create a DataFrame for easy viewing
-            summary_data = []
-
-            for result in results:
-                # Try to extract a match percentage from the analysis text
-                import re
-                match_text = "N/A"
-                match_percent = 0
-
-                try:
-                    # Try to parse the response as JSON if it's in that format
-                    import json
-                    try:
-                        response_data = json.loads(result["Analysis"])
-                        # Look for the summary section which contains the evaluation report
-                        formatted_analysis = ""
-                        for item in response_data:
-                            if "chat_name" in item.get("dict", {}) and item["dict"]["chat_name"] == "summary":
-                                content = item["dict"]["chat_response"]["chat_message"]["dict"]["content"]
-                                formatted_analysis = content
-                                break
-
-                        # Extract score from formatted analysis
-                        if formatted_analysis:
-                            overall_score_matches = re.findall(
-                                r'(\d+)/(\d+)', formatted_analysis)
-                            skill_scores = re.findall(
-                                r'(\w+(\s+\w+)*)\s*\|\s*(\d+)\s*\|', formatted_analysis)
-
-                            if overall_score_matches:
-                                # Use the first match as the overall score
-                                score_numerator = int(
-                                    overall_score_matches[0][0])
-                                score_denominator = int(
-                                    overall_score_matches[0][1])
-                                match_percent = int(
-                                    (score_numerator / score_denominator) * 100)
-                                match_text = f"{match_percent}%"
-                            elif skill_scores:
-                                # Calculate average score from skill scores (assuming 1-5 scale)
-                                total = 0
-                                count = 0
-                                for skill_match in skill_scores:
-                                    if len(skill_match) >= 3 and skill_match[2].isdigit():
-                                        total += int(skill_match[2])
-                                        count += 1
-
-                                if count > 0:
-                                    avg_score = total / count
-                                    # Normalize to percentage (assuming 5 is max)
-                                    match_percent = int((avg_score / 5) * 100)
-                                    match_text = f"{match_percent}%"
-                    except:
-                        # If it's not valid JSON or any error occurs, try to find a percentage in the raw text
-                        score_match = re.search(r'(\d+)%', result["Analysis"])
-                        if score_match:
-                            match_percent = int(score_match.group(1))
-                            match_text = f"{match_percent}%"
-                except:
-                    # Fallback to looking for a percentage in the raw text
-                    score_match = re.search(r'(\d+)%', result["Analysis"])
-                    if score_match:
-                        match_percent = int(score_match.group(1))
-                        match_text = f"{match_percent}%"
-
-                summary_data.append({
-                    "CV Name": result["CV Name"],
-                    "Match Score": match_text,
-                    "Thread ID": result["Thread ID"]
-                })
-
-            # Display the summary table
-            summary_df = pd.DataFrame(summary_data)
-            st.dataframe(summary_df, use_container_width=True)
-
             # Add a clear results button
             if st.button("Clear Results", type="secondary"):
                 st.session_state['analysis_completed'] = False
                 st.session_state['results'] = []
                 st.session_state['thread_ids'] = []
-                st.experimental_rerun()
+                st.rerun()
 
 
 if __name__ == "__main__":
