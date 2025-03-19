@@ -87,7 +87,7 @@ def test_extract_text_from_file_exception():
     assert "Error extracting text: Mock file reading error" in result
 
 
-@patch('PyPDF2.PdfReader')
+@patch('pypdf.PdfReader')
 def test_extract_text_from_pdf_functionality(mock_pdf_reader):
     """Test the PDF extraction functionality."""
     # Set up the mock PDF reader
