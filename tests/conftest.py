@@ -91,15 +91,12 @@ def sample_cv_text():
 
 
 @pytest.fixture
-def sample_evaluation_criteria():
-    """Sample evaluation criteria for testing."""
-    return """
-    1. Technical Skills: Python, JavaScript, React
-    2. Experience: Minimum 3 years in software development
-    3. Education: Computer Science degree or equivalent
-    4. Communication Skills: Clear writing and presentation skills
-    5. Projects: Demonstrated experience with relevant projects
-    """
+def mock_env_vars(monkeypatch):
+    """Mock environment variables for testing."""
+    monkeypatch.setenv("API_BASE_URL", "https://mock-api-url.com/api/v1")
+    monkeypatch.setenv("API_USERNAME", "test_user")
+    monkeypatch.setenv("API_PASSWORD", "test_pass")
+    monkeypatch.setenv("REVISION_ID", "test-revision-id")
 
 
 @pytest.fixture

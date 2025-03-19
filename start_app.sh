@@ -8,12 +8,6 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}Starting CV Analysis Tool...${NC}"
 
-# Check if json-server is installed
-if ! command -v json-server &> /dev/null; then
-    echo -e "${RED}json-server is not installed. Installing globally...${NC}"
-    npm install -g json-server
-fi
-
 # Check if Python virtual environment exists
 if [ ! -d ".venv" ]; then
     echo -e "${RED}Virtual environment not found. Creating one...${NC}"
@@ -41,20 +35,19 @@ else
     fi
 fi
 
-# Start json-server in the background
-echo -e "${GREEN}Starting JSON Server...${NC}"
-json-server --watch db.json --routes routes.json --port 3000 &
-JSON_SERVER_PID=$!
-
-# Give the JSON server a moment to start
-sleep 2
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo -e "${RED}.env file not found. Creating a template...${NC}"
+    echo "API_USERNAME=your_username_here" > .env
+    echo "API_PASSWORD=your_password_here" >> .env
+    echo "API_BASE_URL=https://hr-demo-app.ambitiousriver-e696f55c.australiaeast.azurecontainerapps.io/api/v1" >> .env
+    echo "REVISION_ID=5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b" >> .env
+    echo -e "${RED}Please edit the .env file with your actual credentials before proceeding.${NC}"
+    exit 1
+fi
 
 # Start Streamlit app
 echo -e "${GREEN}Starting Streamlit app...${NC}"
 streamlit run app.py
-
-# When Streamlit is stopped (Ctrl+C), also stop the JSON server
-echo -e "${BLUE}Shutting down servers...${NC}"
-kill $JSON_SERVER_PID
 
 echo -e "${GREEN}All servers stopped. Goodbye!${NC}"

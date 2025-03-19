@@ -10,9 +10,18 @@ import docx2txt
 import pypdf
 import base64
 from typing import List, Dict, Any, Tuple, Optional
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configuration
-API_BASE_URL = "http://localhost:3000/api/v1"  # json-server default port
+API_BASE_URL = os.getenv(
+    "API_BASE_URL", "https://hr-demo-app.ambitiousriver-e696f55c.australiaeast.azurecontainerapps.io/api/v1")
+API_USERNAME = os.getenv("API_USERNAME", "")
+API_PASSWORD = os.getenv("API_PASSWORD", "")
+DEFAULT_REVISION_ID = os.getenv(
+    "REVISION_ID", "5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b")
 
 # Set page config
 st.set_page_config(
@@ -24,45 +33,44 @@ st.set_page_config(
 
 
 class APIClient:
-    """Client for interacting with the Ingenious API."""
+    """Client for interacting with the FastAgent API."""
 
-    @staticmethod
-    def create_chat(cv_content: str, criteria: str, thread_id: Optional[str] = None) -> Dict[str, Any]:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def create_chat(cls, cv_content: str, thread_id: Optional[str] = None, identifier: Optional[str] = None) -> Dict[str, Any]:
         """Send a CV for analysis and get the results."""
         url = f"{API_BASE_URL}/chat"
 
+        # Format the CV content as required by the API
+        user_prompt_data = {
+            "revision_id": DEFAULT_REVISION_ID,
+            "identifier": identifier or str(uuid.uuid4())[:8],
+            "Page_1": cv_content
+        }
+
+        # Convert the user_prompt_data to a JSON string
+        user_prompt_json = json.dumps(user_prompt_data)
+
         payload = {
             "thread_id": thread_id or str(uuid.uuid4()),
-            "user_id": "streamlit_user",
-            "user_prompt": f"CV Content:\n\n{cv_content}\n\nEvaluation Criteria:\n\n{criteria}",
-            "conversation_flow": "cv_analysis",
-            "topic": "cv evaluation",
-            "memory_record": True
+            "conversation_flow": "hr_insights",
+            "user_prompt": user_prompt_json
         }
 
         try:
-            response = requests.post(url, json=payload)
+            # Use basic authentication from environment variables
+            auth = (API_USERNAME, API_PASSWORD)
+            response = requests.post(url, json=payload, auth=auth)
             response.raise_for_status()
             return response.json()
-        except requests.RequestException as e:
+        except Exception as e:
             st.error(f"API Error: {str(e)}")
             return {"error": str(e)}
 
-    @staticmethod
-    def get_conversation(thread_id: str) -> List[Dict[str, Any]]:
-        """Get the conversation history for a thread."""
-        url = f"{API_BASE_URL}/conversations/{thread_id}"
-
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            st.error(f"API Error: {str(e)}")
-            return []
-
-    @staticmethod
-    def submit_feedback(message_id: str, thread_id: str, positive: bool) -> Dict[str, Any]:
+    @classmethod
+    def submit_feedback(cls, message_id: str, thread_id: str, positive: bool) -> Dict[str, Any]:
         """Submit feedback on an analysis."""
         url = f"{API_BASE_URL}/messages/{message_id}/feedback"
 
@@ -74,10 +82,12 @@ class APIClient:
         }
 
         try:
-            response = requests.put(url, json=payload)
+            # Use basic authentication
+            auth = (API_USERNAME, API_PASSWORD)
+            response = requests.put(url, json=payload, auth=auth)
             response.raise_for_status()
             return response.json()
-        except requests.RequestException as e:
+        except Exception as e:
             st.error(f"API Error: {str(e)}")
             return {"error": str(e)}
 
@@ -125,7 +135,7 @@ def main():
     st.title("📄 CV Analysis Tool")
 
     with st.sidebar:
-        st.header("Upload CVs & Criteria")
+        st.header("Upload CVs")
 
         # Multi-file uploader for CVs
         uploaded_files = st.file_uploader(
@@ -134,16 +144,10 @@ def main():
             accept_multiple_files=True
         )
 
-        # Evaluation criteria
+        # Note about fixed criteria
         st.subheader("Evaluation Criteria")
-        criteria = st.text_area(
-            "Enter the criteria to evaluate the CVs against",
-            """1. Technical Skills: Python, JavaScript, React
-2. Experience: Minimum 3 years in software development
-3. Education: Computer Science degree or equivalent
-4. Communication Skills: Clear writing and presentation skills
-5. Projects: Demonstrated experience with relevant projects""",
-            height=200
+        st.info(
+            "This application is using a predefined set of evaluation criteria configured in the API."
         )
 
         # Process button
@@ -205,7 +209,9 @@ def main():
                     cv_text = extract_text_from_file(uploaded_file)
 
                     # Send to API
-                    response = APIClient.create_chat(cv_text, criteria)
+                    identifier = f"cv_{i+1}"
+                    response = APIClient.create_chat(
+                        cv_text, identifier=identifier)
 
                     # Store result
                     result = {

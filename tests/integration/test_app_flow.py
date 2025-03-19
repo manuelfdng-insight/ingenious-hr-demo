@@ -15,6 +15,7 @@ import streamlit as st
 import uuid
 import time
 import io
+import json
 
 # Import app and components for testing
 from app import main, APIClient, extract_text_from_file
@@ -72,6 +73,7 @@ def mock_streamlit():
     sidebar_mock.text_area = mocks['text_area']
     sidebar_mock.button = mocks['button']
     sidebar_mock.download_button = mocks['download_button']
+    sidebar_mock.info = mocks['info']
     mocks['sidebar'].return_value = sidebar_mock
 
     # Setup patches for all the functions
@@ -115,11 +117,10 @@ def sample_uploaded_files():
 
 
 @patch('app.main', autospec=True)
-def test_full_analysis_flow(main_mock, mock_streamlit, mock_session_state, sample_uploaded_files):
+def test_full_analysis_flow(main_mock, mock_streamlit, mock_session_state, sample_uploaded_files, mock_env_vars):
     """Test the full CV analysis flow from upload to results display."""
     # Configure the mocks
     mock_streamlit['sidebar'].file_uploader.return_value = sample_uploaded_files
-    mock_streamlit['sidebar'].text_area.return_value = "Test evaluation criteria"
     # Process button clicked
     mock_streamlit['sidebar'].button.return_value = True
 
@@ -133,13 +134,12 @@ def test_full_analysis_flow(main_mock, mock_streamlit, mock_session_state, sampl
     assert main_mock.call_count == 1
 
 
-@patch('app.APIClient.create_chat')
+@patch('app.requests.post')
 @patch('app.extract_text_from_file')
-def test_error_handling_setup(mock_extract_text, mock_create_chat, mock_streamlit, mock_session_state):
+def test_error_handling_setup(mock_extract_text, mock_post, mock_streamlit, mock_session_state, mock_env_vars):
     """Test setup for error handling during the analysis process."""
     # Configure the mocks
     mock_streamlit['sidebar'].file_uploader.return_value = [Mock()]
-    mock_streamlit['sidebar'].text_area.return_value = "Test evaluation criteria"
     # Process button clicked
     mock_streamlit['sidebar'].button.return_value = True
 
@@ -151,14 +151,14 @@ def test_error_handling_setup(mock_extract_text, mock_create_chat, mock_streamli
     mock_extract_text.return_value = "Mock extracted text from PDF"
 
     # Configure API to fail
-    mock_create_chat.side_effect = Exception("API connection error")
+    mock_post.side_effect = Exception("API connection error")
 
     # Verify mocks are configured correctly
     with patch('time.sleep'):
         # Here we'd normally run main(), but since it's difficult to test in isolation,
         # we'll just verify our test setup is correct
         assert mock_streamlit['sidebar'].file_uploader.return_value is not None
-        assert mock_create_chat.side_effect is not None
+        assert mock_post.side_effect is not None
 
 
 @patch('pandas.DataFrame.to_csv')
@@ -223,7 +223,7 @@ def test_re_search_mock():
 
 
 @patch('app.APIClient.submit_feedback')
-def test_feedback_submission_direct(mock_submit_feedback):
+def test_feedback_submission_direct(mock_submit_feedback, mock_env_vars):
     """Test feedback submission functionality directly."""
     # Configure mocks
     mock_submit_feedback.return_value = {
@@ -240,3 +240,33 @@ def test_feedback_submission_direct(mock_submit_feedback):
 
     # Verify result
     assert result["message"] == "Feedback submitted successfully"
+
+
+def test_create_chat_with_correct_format(sample_cv_text, mock_env_vars):
+    """Test that create_chat formats the payload correctly."""
+    with patch('app.requests.post') as mock_post:
+        # Configure mock response
+        mock_response = Mock()
+        mock_response.json.return_value = {"agent_response": "Test response"}
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        # Call the method directly
+        APIClient.create_chat(sample_cv_text, identifier="test_id")
+
+        # Check that the call was made
+        mock_post.assert_called_once()
+
+        # Get the call arguments
+        call_args = mock_post.call_args
+
+        # Verify the format of the payload
+        json_payload = call_args[1]['json']
+        assert "user_prompt" in json_payload
+
+        # The user_prompt is a JSON string
+        user_prompt_data = json.loads(json_payload["user_prompt"])
+        assert "identifier" in user_prompt_data
+        assert user_prompt_data["identifier"] == "test_id"
+        assert "Page_1" in user_prompt_data
+        assert sample_cv_text in user_prompt_data["Page_1"]

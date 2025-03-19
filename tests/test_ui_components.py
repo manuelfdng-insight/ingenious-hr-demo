@@ -90,30 +90,41 @@ def test_main_entry_point(mock_main):
     mock_main.assert_called_once()
 
 
-@patch('app.APIClient.submit_feedback')
-def test_feedback_buttons(mock_submit_feedback):
+@patch('app.requests.put')
+def test_feedback_buttons(mock_put):
     """Test the feedback button functionality by directly calling the API client method."""
-    # Configure the mock feedback response
-    mock_submit_feedback.return_value = {
-        "message": "Feedback submitted successfully"
-    }
+    # Configure the mock response
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "message": "Feedback submitted successfully"}
+    mock_response.raise_for_status.return_value = None
+    mock_put.return_value = mock_response
 
     # Test direct API client calls instead of via UI
     # Simulate positive feedback
     APIClient.submit_feedback("msg_test456", "thread_test123", True)
 
     # Verify the API call
-    mock_submit_feedback.assert_called_with(
-        "msg_test456", "thread_test123", True
-    )
+    mock_put.assert_called_once()
+    call_args = mock_put.call_args
+    payload = call_args[1]['json']
+    assert payload["thread_id"] == "thread_test123"
+    assert payload["message_id"] == "msg_test456"
+    assert payload["positive_feedback"] is True
 
     # Reset the mock
-    mock_submit_feedback.reset_mock()
+    mock_put.reset_mock()
+
+    # Reconfigure the mock response
+    mock_put.return_value = mock_response
 
     # Simulate negative feedback
     APIClient.submit_feedback("msg_test456", "thread_test123", False)
 
     # Verify the API call
-    mock_submit_feedback.assert_called_with(
-        "msg_test456", "thread_test123", False
-    )
+    mock_put.assert_called_once()
+    call_args = mock_put.call_args
+    payload = call_args[1]['json']
+    assert payload["thread_id"] == "thread_test123"
+    assert payload["message_id"] == "msg_test456"
+    assert payload["positive_feedback"] is False

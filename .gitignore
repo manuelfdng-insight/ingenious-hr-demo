@@ -63,3 +63,6 @@ Thumbs.db
 digest.txt
 **/digest.txt
 **/ingest.sh
+
+#env files
+.env

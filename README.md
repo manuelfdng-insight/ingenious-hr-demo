@@ -1,18 +1,18 @@
 # CV Analysis Tool
 
-A Streamlit-based application that analyzes multiple CV/resume documents against user-defined criteria, providing detailed feedback and comparison tools for recruitment processes.
+A Streamlit-based application that analyzes multiple CV/resume documents using a sophisticated AI model, providing detailed feedback and comparison tools for recruitment processes.
 
 ![CV Analysis Tool](images/homepage.png)
 
 ## Overview
 
-The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hiring managers efficiently evaluate multiple candidate CVs against specific job requirements. The application provides a user-friendly interface for uploading documents, defining evaluation criteria, and reviewing analysis results with visual comparisons.
+The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recruiters and hiring managers efficiently evaluate multiple candidate CVs against job requirements. The application provides a user-friendly interface for uploading documents and reviewing analysis results with visual comparisons.
 
 ### Key Features
 
 - **Multi-CV Upload**: Support for PDF, DOCX, and TXT file formats
-- **Customizable Criteria**: Define specific evaluation criteria for candidate assessment
-- **Individual Analysis**: Detailed breakdown of each CV against specified criteria
+- **AI-Powered Analysis**: Detailed evaluation using a sophisticated AI analysis engine
+- **Individual Analysis**: Comprehensive breakdown of each CV against predefined criteria
 - **Match Scoring**: Visual representation of how well each candidate matches requirements
 - **Comparative Summary**: At-a-glance view of all candidates' match percentages
 - **Feedback System**: Rate the quality of analysis to improve future results
@@ -23,7 +23,7 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
 ### Prerequisites
 
 - Python 3.8+
-- Node.js and npm (for the mock API server)
+- Azure FastAPI endpoint credentials (username and password)
 
 ### Installation
 
@@ -34,20 +34,23 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
    cd cv-analysis-tool
    ```
 
-2. **Set up the mock API server**
+2. **Create and configure the environment file**
 
-   ```bash
-   # Install json-server globally
-   npm install -g json-server
+   Create a `.env` file in the root directory with the following content:
 
-   # Start the server with the provided configuration
-   json-server --watch db.json --routes routes.json --port 3000
    ```
+   API_USERNAME=your_username_here
+   API_PASSWORD=your_password_here
+   API_BASE_URL=https://hr-demo-app.ambitiousriver-e696f55c.australiaeast.azurecontainerapps.io/api/v1
+   REVISION_ID=5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b
+   ```
+
+   Replace `your_username_here` and `your_password_here` with your actual API credentials.
 
 3. **Install Python dependencies**
 
    ```bash
-   # Create and activate a virtual environment (optional but recommended)
+   # Create and activate a virtual environment (recommended)
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
@@ -72,6 +75,8 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
    start_app.bat
    ```
 
+   The startup scripts will check for the existence of the virtual environment and `.env` file, creating them if necessary.
+
 5. **Access the application**
 
    Open your browser and navigate to `http://localhost:8501`
@@ -79,32 +84,34 @@ The CV Analysis Tool interfaces with the Ingenious API to help recruiters and hi
 ## How to Use
 
 1. **Upload CVs**: Use the sidebar to upload one or more CV files (PDF, DOCX, or TXT)
-2. **Define Criteria**: Enter evaluation criteria in the text area provided
-3. **Run Analysis**: Click the "Analyze CVs" button to process all documents
-4. **Review Results**:
+2. **Run Analysis**: Click the "Analyze CVs" button to process all documents
+3. **Review Results**:
    - Navigate between individual tabs to see detailed analysis for each CV
-   - Use the summary table to compare all candidates
+   - Use the summary table to compare all candidates side by side
+   - Look for highlighted match percentages to identify top candidates
    - Provide feedback using the thumbs up/down buttons
-5. **Export Data**: Download results as CSV for further processing or sharing
+4. **Export Data**: Download results as CSV for further processing or sharing
 
 ## Project Structure
 
 - **app.py**: Main Streamlit application file containing the UI and API integration logic
-- **db.json**: Mock database file for simulating API responses during development
-- **requirements.txt**: Python dependencies for the project
-- **.gitignore**: Specifies files to exclude from version control
-- **start_app.sh**: Bash script to start both the JSON server and Streamlit app
-- **start_app.bat**: Windows batch file to start both the JSON server and Streamlit app
+- **.env**: Environment variables file with API credentials (not checked into version control)
+- **requirements.txt**: Python dependencies for the project including python-dotenv
+- **.gitignore**: Specifies files to exclude from version control (includes .env)
+- **start_app.sh**: Bash script to start the Streamlit app with environment setup
+- **start_app.bat**: Windows batch file to start the Streamlit app with environment setup
+- **tests/**: Directory containing test files
 
 ### Component Breakdown
 
 #### APIClient Class
 
-Handles all interactions with the Ingenious API, including:
+Handles all interactions with the FastAgent API, including:
 
-- Submitting CVs for analysis
-- Retrieving conversation history
+- Submitting CVs for analysis with proper authentication
+- Formatting payloads according to API requirements
 - Sending user feedback on analysis quality
+- Error handling for API requests
 
 #### Text Extraction Functions
 
@@ -118,10 +125,11 @@ Utilities that handle various document formats:
 
 The application is divided into:
 
-- Sidebar for input controls (file upload, criteria definition)
+- Sidebar for input controls (file upload)
 - Tab-based interface for individual CV analysis
 - Summary table for at-a-glance comparison
 - Feedback mechanisms for continuous improvement
+- Progress indicators during analysis
 
 ## Testing
 
@@ -129,7 +137,7 @@ The application includes a comprehensive test suite that ensures all components 
 
 - **Unit Tests**: Test individual functions and classes in isolation
 
-  - `test_api_client.py`: Tests the API client functionality
+  - `test_api_client.py`: Tests the API client functionality and API interactions
   - `test_text_extraction.py`: Tests document text extraction functions
   - `test_ui_components.py`: Tests UI components and interactions
 
@@ -154,18 +162,25 @@ pytest --cov=app
 
 ## API Integration
 
-The application interacts with the following API endpoints:
+The application interacts with the following Azure-hosted API endpoints:
 
-- `POST /api/v1/chat`: Submit CVs for analysis
-- `GET /api/v1/conversations/{thread_id}`: Retrieve conversation history
+- `POST /api/v1/chat`: Submit CVs for analysis (Basic authentication required)
 - `PUT /api/v1/messages/{message_id}/feedback`: Submit feedback on analysis quality
 
-During development, these endpoints are mocked via json-server using the provided db.json file.
+## Security Notes
 
-## Customization Options
+- API credentials are stored in the `.env` file which is not committed to version control
+- The application uses HTTP Basic Authentication for API requests
+- Ensure your `.env` file is properly secured and not shared publicly
 
-- Modify the `API_BASE_URL` in app.py to connect to a different server
+## Configuration Options
+
+- Modify the environment variables in the `.env` file to connect to a different server or use different credentials
 - Extend `extract_text_from_file()` to support additional document formats
 - Adjust the UI layout by modifying the Streamlit component structure
-- Enhance visualization options in the individual analysis tabs
-- Implement robust error handling in the APIClient class for improved reliability
+
+## Important Notes
+
+- This application uses a predefined set of evaluation criteria configured in the API
+- The current implementation is designed to work with a specific revision ID in the FastAgent API
+- If you need to make changes to the criteria or use a different revision ID, update the values in your `.env` file
