@@ -289,10 +289,9 @@ def main():
                     import json
 
                     for header in json.loads(result["Analysis"]):
-                        text = header.get('__dict__').get('chat_name')
-                        st.markdown(f'#### {text}')
-                        st.markdown(header.get('__dict__').get('chat_response').get(
-                            'chat_message').get('__dict__').get('content'))
+                        if header.get('__dict__').get('chat_name') in ["summary", "applicant_lookup_agent"]:
+                            st.markdown(header.get('__dict__').get('chat_response').get(
+                                'chat_message').get('__dict__').get('content'))
 
                     # Feedback buttons
                     col1, col2 = st.columns(2)
