@@ -12,11 +12,13 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
 
 - **Multi-CV Upload**: Support for PDF, DOCX, and TXT file formats
 - **AI-Powered Analysis**: Detailed evaluation using a sophisticated AI analysis engine
+- **Smart Response Formatting**: Clean, readable presentation of AI analysis results
 - **Individual Analysis**: Comprehensive breakdown of each CV against predefined criteria
 - **Match Scoring**: Visual representation of how well each candidate matches requirements
 - **Comparative Summary**: At-a-glance view of all candidates' match percentages
 - **Feedback System**: Rate the quality of analysis to improve future results
 - **Export Functionality**: Download analysis results in CSV format
+- **Reset Capability**: Clear results and analyze new CVs without restarting
 
 ## Getting Started
 
@@ -87,10 +89,13 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
 2. **Run Analysis**: Click the "Analyze CVs" button to process all documents
 3. **Review Results**:
    - Navigate between individual tabs to see detailed analysis for each CV
+   - View formatted analysis reports with skills assessments and recommendations
+   - See visual score representations with progress bars
    - Use the summary table to compare all candidates side by side
    - Look for highlighted match percentages to identify top candidates
    - Provide feedback using the thumbs up/down buttons
 4. **Export Data**: Download results as CSV for further processing or sharing
+5. **Reset and Restart**: Use the "Clear Results" button to analyze a new set of CVs
 
 ## Project Structure
 
@@ -121,15 +126,25 @@ Utilities that handle various document formats:
 - `extract_text_from_pdf()`: Processes PDF documents using PyPDF2
 - `extract_text_from_docx()`: Extracts text from Word documents using docx2txt
 
+#### Response Formatting
+
+Smart response processing to ensure readable output:
+
+- JSON parsing to extract the relevant analysis sections
+- Extraction of scores from different text formats
+- Multiple fallback options to handle various response structures
+- Conversion of raw scores to visual progress indicators
+
 #### UI Components
 
 The application is divided into:
 
-- Sidebar for input controls (file upload)
+- Sidebar for input controls and application information
 - Tab-based interface for individual CV analysis
 - Summary table for at-a-glance comparison
 - Feedback mechanisms for continuous improvement
 - Progress indicators during analysis
+- Reset functionality to analyze new CVs
 
 ## Testing
 
@@ -184,3 +199,12 @@ The application interacts with the following Azure-hosted API endpoints:
 - This application uses a predefined set of evaluation criteria configured in the API
 - The current implementation is designed to work with a specific revision ID in the FastAgent API
 - If you need to make changes to the criteria or use a different revision ID, update the values in your `.env` file
+- The "Clear Results" button allows you to analyze new CVs without restarting the application
+
+## Recent Improvements
+
+- **Smart Response Formatting**: Analysis results are now cleanly formatted rather than displaying raw JSON data
+- **Enhanced Score Visualization**: Multiple methods for extracting and displaying scores from AI analysis
+- **Reset Functionality**: Added ability to clear results and analyze new CVs without restarting
+- **Improved Error Handling**: Better feedback and recovery from API errors
+- **Enhanced UI**: More informative explanations and progress indicators

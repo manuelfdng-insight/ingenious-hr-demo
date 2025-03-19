@@ -144,10 +144,20 @@ def main():
             accept_multiple_files=True
         )
 
+        # Note about the application
+        st.subheader("About This Application")
+        st.text(
+            "This application analyzes CVs using a sophisticated AI model. "
+            "Upload your CVs to receive a detailed evaluation, including skills assessment, "
+            "experience analysis, and overall match score."
+        )
+
         # Note about fixed criteria
         st.subheader("Evaluation Criteria")
-        st.info(
-            "This application is using a predefined set of evaluation criteria configured in the API."
+        st.text(
+            "This application is using a predefined set of evaluation criteria "
+            "configured in the API. The AI will evaluate candidates against standard "
+            "requirements for the position."
         )
 
         # Process button
@@ -173,16 +183,36 @@ def main():
             st.markdown("""
             ### Example CV Analysis Result
             
-            **CV: John Smith (Software Engineer)**
-            
-            **Analysis Results:**
-            - **Technical Skills:** Candidate has strong Python and JavaScript experience but no mention of React. (Score: 2/3)
-            - **Experience:** 4 years at XYZ Corp as a software developer. Meets requirement. (Score: 3/3)
-            - **Education:** Bachelor's in Computer Science from State University. Meets requirement. (Score: 3/3)
-            - **Communication Skills:** Well-written CV with clear descriptions. Evidence of presentations at conferences. (Score: 3/3)
-            - **Projects:** Led development of e-commerce platform and API integration projects. (Score: 2/3)
-            
-            **Overall Match:** 13/15 (87%)
+            #### Evaluation Report
+
+            ### Overall Summary:
+            John Smith's qualifications and extensive experience in software development make him a strong candidate for positions related to web development. His demonstrated expertise in Python, JavaScript, and React highlights his suitability for roles requiring these technical skills.
+
+            ### Detailed Evaluation:
+
+            #### Technical Skills
+            John has strong experience with Python, JavaScript, and React, which are key requirements for the role. His background includes building RESTful APIs using Flask and implementing front-end features with JavaScript.
+
+            #### Experience
+            John has 7 years of experience in software development, exceeding the minimum requirement of 3 years. He has held senior positions and led a team of junior developers.
+
+            #### Education
+            John holds a Bachelor's degree in Computer Science from the University of Technology, meeting the educational requirement for the position.
+
+            #### Communication Skills
+            John's CV is well-written with clear descriptions of his responsibilities and achievements, indicating good written communication skills.
+
+            ### Scoring:
+
+            | Criteria | Score (1-5) | Comment |
+            |---------------------------|-------------|---------|
+            | Technical Skills | 5 | Strong experience in all required technologies. |
+            | Experience | 5 | Exceeds required years of experience and has leadership experience. |
+            | Education | 5 | Holds relevant degree in Computer Science. |
+            | Communication Skills | 4 | Well-written CV demonstrates good communication ability. |
+
+            ### Recommendation:
+            John Smith is highly suitable for the position with a strong technical background, relevant experience, and appropriate education. His profile indicates he would be a valuable addition to the team.
             """)
 
     elif process_button or st.session_state.get('analysis_completed'):
@@ -212,6 +242,12 @@ def main():
                     identifier = f"cv_{i+1}"
                     response = APIClient.create_chat(
                         cv_text, identifier=identifier)
+
+                    # Log the response for debugging if needed
+                    if "error" in response:
+                        st.error(
+                            f"Error analyzing {uploaded_file.name}: {response['error']}")
+                        continue
 
                     # Store result
                     result = {
@@ -248,7 +284,33 @@ def main():
 
                     # Analysis result
                     st.markdown("### Analysis")
-                    st.markdown(result["Analysis"])
+
+                    # Format the response to extract the relevant summary
+                    try:
+                        # Try to parse the response as JSON if it's in that format
+                        import json
+                        try:
+                            response_data = json.loads(result["Analysis"])
+                            # Look for the summary section which contains the evaluation report
+                            formatted_analysis = ""
+                            for item in response_data:
+                                if "chat_name" in item.get("dict", {}) and item["dict"]["chat_name"] == "summary":
+                                    content = item["dict"]["chat_response"]["chat_message"]["dict"]["content"]
+                                    formatted_analysis = content
+                                    break
+
+                            if not formatted_analysis:
+                                # If we couldn't find the summary section, just use the raw response
+                                formatted_analysis = result["Analysis"]
+                        except json.JSONDecodeError:
+                            # If it's not valid JSON, use the raw text
+                            formatted_analysis = result["Analysis"]
+                    except Exception as e:
+                        # If any error occurs, fall back to the raw text
+                        formatted_analysis = result["Analysis"]
+
+                    # Display the formatted analysis
+                    st.markdown(formatted_analysis)
 
                     # Feedback buttons
                     col1, col2 = st.columns(2)
@@ -275,42 +337,128 @@ def main():
                     try:
                         # Try to extract a score if present in the analysis text
                         import re
-                        score_match = re.search(r'(\d+)%', result["Analysis"])
-                        if score_match:
-                            score = int(score_match.group(1))
-                            st.metric("Match Score", f"{score}%")
+                        overall_score_matches = re.findall(
+                            r'(\d+)/(\d+)', formatted_analysis)
+                        skill_scores = re.findall(
+                            r'(\w+(\s+\w+)*)\s*\|\s*(\d+)\s*\|', formatted_analysis)
+
+                        if overall_score_matches:
+                            # Use the first match as the overall score
+                            score_numerator = int(overall_score_matches[0][0])
+                            score_denominator = int(
+                                overall_score_matches[0][1])
+                            score_percentage = int(
+                                (score_numerator / score_denominator) * 100)
+                            st.metric("Match Score", f"{score_percentage}%")
 
                             # Visual representation
-                            st.progress(score/100)
-                    except:
+                            st.progress(score_percentage/100)
+                        elif skill_scores:
+                            # Calculate average score from skill scores (assuming 1-5 scale)
+                            total = 0
+                            count = 0
+                            for skill_match in skill_scores:
+                                if len(skill_match) >= 3 and skill_match[2].isdigit():
+                                    total += int(skill_match[2])
+                                    count += 1
+
+                            if count > 0:
+                                avg_score = total / count
+                                # Normalize to percentage (assuming 5 is max)
+                                normalized_score = int((avg_score / 5) * 100)
+                                st.metric("Average Skill Score",
+                                          f"{normalized_score}%")
+
+                                # Visual representation
+                                st.progress(normalized_score/100)
+                    except Exception as e:
+                        # If we can't extract a score, don't show anything
                         pass
 
-        # Show summary as a table
-        st.header("Summary")
+            # Show summary as a table
+            st.header("Summary")
 
-        # Create a DataFrame for easy viewing
-        summary_data = []
+            # Create a DataFrame for easy viewing
+            summary_data = []
 
-        for result in results:
-            # Try to extract a match percentage from the analysis text
-            import re
-            match_text = "N/A"
-            match_percent = 0
+            for result in results:
+                # Try to extract a match percentage from the analysis text
+                import re
+                match_text = "N/A"
+                match_percent = 0
 
-            score_match = re.search(r'(\d+)%', result["Analysis"])
-            if score_match:
-                match_percent = int(score_match.group(1))
-                match_text = f"{match_percent}%"
+                try:
+                    # Try to parse the response as JSON if it's in that format
+                    import json
+                    try:
+                        response_data = json.loads(result["Analysis"])
+                        # Look for the summary section which contains the evaluation report
+                        formatted_analysis = ""
+                        for item in response_data:
+                            if "chat_name" in item.get("dict", {}) and item["dict"]["chat_name"] == "summary":
+                                content = item["dict"]["chat_response"]["chat_message"]["dict"]["content"]
+                                formatted_analysis = content
+                                break
 
-            summary_data.append({
-                "CV Name": result["CV Name"],
-                "Match Score": match_text,
-                "Thread ID": result["Thread ID"]
-            })
+                        # Extract score from formatted analysis
+                        if formatted_analysis:
+                            overall_score_matches = re.findall(
+                                r'(\d+)/(\d+)', formatted_analysis)
+                            skill_scores = re.findall(
+                                r'(\w+(\s+\w+)*)\s*\|\s*(\d+)\s*\|', formatted_analysis)
 
-        # Display the summary table
-        summary_df = pd.DataFrame(summary_data)
-        st.dataframe(summary_df, use_container_width=True)
+                            if overall_score_matches:
+                                # Use the first match as the overall score
+                                score_numerator = int(
+                                    overall_score_matches[0][0])
+                                score_denominator = int(
+                                    overall_score_matches[0][1])
+                                match_percent = int(
+                                    (score_numerator / score_denominator) * 100)
+                                match_text = f"{match_percent}%"
+                            elif skill_scores:
+                                # Calculate average score from skill scores (assuming 1-5 scale)
+                                total = 0
+                                count = 0
+                                for skill_match in skill_scores:
+                                    if len(skill_match) >= 3 and skill_match[2].isdigit():
+                                        total += int(skill_match[2])
+                                        count += 1
+
+                                if count > 0:
+                                    avg_score = total / count
+                                    # Normalize to percentage (assuming 5 is max)
+                                    match_percent = int((avg_score / 5) * 100)
+                                    match_text = f"{match_percent}%"
+                    except:
+                        # If it's not valid JSON or any error occurs, try to find a percentage in the raw text
+                        score_match = re.search(r'(\d+)%', result["Analysis"])
+                        if score_match:
+                            match_percent = int(score_match.group(1))
+                            match_text = f"{match_percent}%"
+                except:
+                    # Fallback to looking for a percentage in the raw text
+                    score_match = re.search(r'(\d+)%', result["Analysis"])
+                    if score_match:
+                        match_percent = int(score_match.group(1))
+                        match_text = f"{match_percent}%"
+
+                summary_data.append({
+                    "CV Name": result["CV Name"],
+                    "Match Score": match_text,
+                    "Thread ID": result["Thread ID"]
+                })
+
+            # Display the summary table
+            summary_df = pd.DataFrame(summary_data)
+            st.dataframe(summary_df, use_container_width=True)
+
+            # Add a clear results button
+            if st.button("Clear Results", type="secondary"):
+                st.session_state['analysis_completed'] = False
+                st.session_state['results'] = []
+                st.session_state['thread_ids'] = []
+                st.experimental_rerun()
 
 
 if __name__ == "__main__":
