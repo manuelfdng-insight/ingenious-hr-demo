@@ -19,11 +19,10 @@ if not exist .env (
     echo API_PASSWORD=your_password_here>> .env
     echo API_BASE_URL=https://hr-demo-app.ambitiousriver-e696f55c.australiaeast.azurecontainerapps.io/api/v1>> .env
     echo REVISION_ID=5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b>> .env
-    echo AZURE_BLOB_SAS_TOKEN=your_sas_token_here>> .env
-    echo AZURE_BLOB_STORAGE_URL=https://stasydingdevlogkm001.blob.core.windows.net>> .env
-    echo AZURE_BLOB_CONTAINER=hr-app-data>> .env
+    echo # Add your full Azure Blob Storage URL with SAS token>> .env
+    echo AZURE_BLOB_STORAGE_URL=https://storageaccount.blob.core.windows.net/container/blob?sastoken>> .env
     echo Please edit the .env file with your actual credentials before proceeding.
-    echo Especially ensure the AZURE_BLOB_SAS_TOKEN is provided for job criteria updates.
+    echo Especially ensure the AZURE_BLOB_STORAGE_URL is provided for job criteria updates.
     exit /b
 )
 
