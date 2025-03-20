@@ -1,272 +1,230 @@
 """
-Integration tests for the CV Analysis Tool.
-
-These tests verify that the entire application flow works correctly,
-from file upload to displaying results.
-
-Since Streamlit apps are challenging to test end-to-end, we focus on
-testing the integration between components rather than UI interactions.
+Integration tests for the CV Analysis Tool application flow.
+Tests how components work together in the complete application.
 """
-import os
+
 import pytest
-import pandas as pd
-from unittest.mock import patch, Mock, MagicMock
 import streamlit as st
-import uuid
-import time
-import io
-import json
-
-# Import app and components for testing
-from app import main, APIClient, extract_text_from_file
-
-
-class MockSpinnerContext:
-    """Mock context manager for Streamlit spinner."""
-
-    def __init__(self, text):
-        self.text = text
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+from unittest.mock import patch, MagicMock
+from app import main
+from ui.main_page import process_cvs, display_results
+from ui.sidebar import render_sidebar
+from services import APIClient, extract_text_from_file
 
 
 @pytest.fixture
 def mock_session_state():
-    """Mock Streamlit's session state."""
-    with patch.object(st, 'session_state', {}) as mock_state:
-        yield mock_state
-
-
-@pytest.fixture
-def mock_streamlit():
-    """Mock key Streamlit functions used in the app."""
-    # Create mocks for all Streamlit functions used in the app
-    mocks = {
-        'title': Mock(),
-        'header': Mock(),
-        'subheader': Mock(),
-        'sidebar': MagicMock(),
-        'file_uploader': Mock(),
-        'text_area': Mock(),
-        'button': Mock(),
-        'spinner': Mock(),
-        'progress': Mock(),
-        'tabs': Mock(),
-        'columns': Mock(),
-        'dataframe': Mock(),
-        'markdown': Mock(),
-        'info': Mock(),
-        'error': Mock(),
-        'success': Mock(),
-        'metric': Mock(),
-        'expander': Mock(),
-        'download_button': Mock()
+    """Mock Streamlit session state for testing."""
+    # Setup initial session state
+    session_state = {
+        'analysis_completed': False,
+        'results': [],
+        'thread_ids': []
     }
 
-    # Setup the sidebar to return appropriate methods
-    sidebar_mock = MagicMock()
-    sidebar_mock.file_uploader = mocks['file_uploader']
-    sidebar_mock.text_area = mocks['text_area']
-    sidebar_mock.button = mocks['button']
-    sidebar_mock.download_button = mocks['download_button']
-    sidebar_mock.info = mocks['info']
-    mocks['sidebar'].return_value = sidebar_mock
-
-    # Setup patches for all the functions
-    with patch('streamlit.title', mocks['title']), \
-            patch('streamlit.header', mocks['header']), \
-            patch('streamlit.subheader', mocks['subheader']), \
-            patch('streamlit.sidebar', mocks['sidebar']), \
-            patch('streamlit.spinner', mocks['spinner']), \
-            patch('streamlit.progress', mocks['progress']), \
-            patch('streamlit.tabs', mocks['tabs']), \
-            patch('streamlit.columns', mocks['columns']), \
-            patch('streamlit.dataframe', mocks['dataframe']), \
-            patch('streamlit.markdown', mocks['markdown']), \
-            patch('streamlit.info', mocks['info']), \
-            patch('streamlit.error', mocks['error']), \
-            patch('streamlit.success', mocks['success']), \
-            patch('streamlit.metric', mocks['metric']), \
-            patch('streamlit.expander', mocks['expander']), \
-            patch('streamlit.download_button', mocks['download_button']):
-
-        yield mocks
+    # Create a context manager to patch st.session_state
+    with patch.object(st, 'session_state', session_state):
+        yield session_state
 
 
-@pytest.fixture
-def sample_uploaded_files():
-    """Create sample uploaded files for testing."""
-    # Create mock CV files
-    pdf_file = Mock()
-    pdf_file.name = "candidate1.pdf"
-    pdf_file.getvalue = lambda: b"%PDF-1.5 Mock PDF content"
+def test_main_app_flow_no_files(mock_streamlit, mock_session_state):
+    """Test the main app flow with no files uploaded."""
+    with patch('ui.sidebar.render_sidebar', return_value=([], False)) as mock_render_sidebar, \
+            patch('streamlit.info') as mock_info, \
+            patch('streamlit.expander') as mock_expander:
 
-    docx_file = Mock()
-    docx_file.name = "candidate2.docx"
-    docx_file.getvalue = lambda: b"PK Mock DOCX content"
+        # Call the main function
+        main()
 
-    txt_file = Mock()
-    txt_file.name = "candidate3.txt"
-    txt_file.getvalue = lambda: b"This is a plain text CV for candidate 3"
+        # Verify the sidebar was rendered
+        mock_render_sidebar.assert_called_once()
 
-    return [pdf_file, docx_file, txt_file]
+        # Verify the info message was displayed
+        mock_info.assert_called_once()
+        assert "Please upload one or more CV files" in mock_info.call_args[0][0]
 
-
-@patch('app.main', autospec=True)
-def test_full_analysis_flow(main_mock, mock_streamlit, mock_session_state, sample_uploaded_files, mock_env_vars):
-    """Test the full CV analysis flow from upload to results display."""
-    # Configure the mocks
-    mock_streamlit['sidebar'].file_uploader.return_value = sample_uploaded_files
-    # Process button clicked
-    mock_streamlit['sidebar'].button.return_value = True
-
-    # This test now validates that main() would be called with the right context,
-    # rather than actually calling main() which is complex to test
-
-    # Call the mock directly
-    main_mock()
-
-    # Verify main was called
-    assert main_mock.call_count == 1
+        # Verify the example expander was shown
+        mock_expander.assert_called_once()
+        assert "View Example Analysis" in mock_expander.call_args[0][0]
 
 
-@patch('app.requests.post')
-@patch('app.extract_text_from_file')
-def test_error_handling_setup(mock_extract_text, mock_post, mock_streamlit, mock_session_state, mock_env_vars):
-    """Test setup for error handling during the analysis process."""
-    # Configure the mocks
-    mock_streamlit['sidebar'].file_uploader.return_value = [Mock()]
-    # Process button clicked
-    mock_streamlit['sidebar'].button.return_value = True
+def test_main_app_flow_with_files(mock_streamlit, mock_session_state, sample_pdf_file, mock_api_response):
+    """Test the main app flow with files uploaded."""
+    # Mock uploaded files
+    uploaded_files = [sample_pdf_file]
 
-    # Mock the spinner context manager
-    mock_streamlit['spinner'].return_value = MockSpinnerContext(
-        "Analyzing CVs...")
+    with patch('ui.sidebar.render_sidebar', return_value=(uploaded_files, True)) as mock_render_sidebar, \
+            patch('ui.main_page.process_cvs', return_value=[{"CV Name": "sample.pdf", "Analysis": "Sample analysis"}]) as mock_process_cvs, \
+            patch('ui.main_page.display_results') as mock_display_results:
 
-    # Configure text extraction to succeed
-    mock_extract_text.return_value = "Mock extracted text from PDF"
+        # Call the main function
+        main()
 
-    # Configure API to fail
-    mock_post.side_effect = Exception("API connection error")
+        # Verify the sidebar was rendered
+        mock_render_sidebar.assert_called_once()
 
-    # Verify mocks are configured correctly
-    with patch('time.sleep'):
-        # Here we'd normally run main(), but since it's difficult to test in isolation,
-        # we'll just verify our test setup is correct
-        assert mock_streamlit['sidebar'].file_uploader.return_value is not None
-        assert mock_post.side_effect is not None
+        # Verify the CVs were processed
+        mock_process_cvs.assert_called_once_with(uploaded_files)
+
+        # Verify the results were displayed
+        mock_display_results.assert_called_once()
+
+        # Verify the session state was updated
+        assert mock_session_state['analysis_completed'] is True
+        assert len(mock_session_state['results']) == 1
+        assert mock_session_state['results'][0]["CV Name"] == "sample.pdf"
 
 
-@patch('pandas.DataFrame.to_csv')
-def test_export_results_functionality(mock_to_csv, mock_streamlit, mock_session_state):
-    """Test the export results functionality setup."""
-    # Set up session state with some results
-    st.session_state['analysis_completed'] = True
-    st.session_state['results'] = [
+def test_main_app_flow_already_completed(mock_streamlit, mock_session_state):
+    """Test the main app flow when analysis is already completed."""
+    # Setup pre-existing results
+    mock_session_state['analysis_completed'] = True
+    mock_session_state['results'] = [
+        {"CV Name": "previous.pdf", "Analysis": "Previous analysis"}]
+
+    with patch('ui.sidebar.render_sidebar', return_value=([MagicMock()], False)) as mock_render_sidebar, \
+            patch('ui.main_page.process_cvs') as mock_process_cvs, \
+            patch('ui.main_page.display_results') as mock_display_results:
+
+        # Call the main function
+        main()
+
+        # Verify the sidebar was rendered
+        mock_render_sidebar.assert_called_once()
+
+        # Verify the CVs were not processed again
+        mock_process_cvs.assert_not_called()
+
+        # Verify the results were displayed
+        mock_display_results.assert_called_once_with(
+            mock_session_state['results'])
+
+
+def test_process_cvs(mock_streamlit, sample_pdf_file, mock_api_response):
+    """Test processing of CV files."""
+    # Mock uploaded files
+    uploaded_files = [sample_pdf_file]
+
+    with patch('services.extract_text_from_file', return_value="Sample CV text") as mock_extract_text, \
+            patch('services.APIClient.create_chat', return_value=mock_api_response) as mock_create_chat, \
+            patch('streamlit.spinner') as mock_spinner, \
+            patch('streamlit.progress') as mock_progress, \
+            patch('time.sleep') as mock_sleep:
+
+        # Call the function
+        results = process_cvs(uploaded_files)
+
+        # Verify text extraction was called
+        mock_extract_text.assert_called_once_with(sample_pdf_file)
+
+        # Verify API call was made
+        mock_create_chat.assert_called_once()
+        args, kwargs = mock_create_chat.call_args
+        assert args[0] == "Sample CV text"
+        assert kwargs['identifier'] == "cv_1"
+
+        # Verify progress was updated
+        mock_progress.return_value.progress.assert_called_once_with(1.0)
+
+        # Verify results were returned correctly
+        assert len(results) == 1
+        assert results[0]["CV Name"] == "sample.pdf"
+        assert results[0]["Analysis"] == mock_api_response["agent_response"]
+        assert results[0]["Thread ID"] == mock_api_response["thread_id"]
+        assert results[0]["Message ID"] == mock_api_response["message_id"]
+
+
+def test_process_cvs_multiple_files(mock_streamlit, sample_pdf_file, sample_docx_file, mock_api_response):
+    """Test processing of multiple CV files."""
+    # Mock uploaded files
+    uploaded_files = [sample_pdf_file, sample_docx_file]
+
+    with patch('services.extract_text_from_file', return_value="Sample text") as mock_extract_text, \
+            patch('services.APIClient.create_chat', return_value=mock_api_response) as mock_create_chat, \
+            patch('streamlit.spinner') as mock_spinner, \
+            patch('streamlit.progress') as mock_progress, \
+            patch('time.sleep') as mock_sleep:
+
+        # Call the function
+        results = process_cvs(uploaded_files)
+
+        # Verify text extraction was called for each file
+        assert mock_extract_text.call_count == 2
+
+        # Verify API call was made for each file
+        assert mock_create_chat.call_count == 2
+
+        # Verify progress was updated correctly
+        first_progress = mock_progress.return_value.progress.call_args_list[0][0][0]
+        second_progress = mock_progress.return_value.progress.call_args_list[1][0][0]
+        assert first_progress == 0.5
+        assert second_progress == 1.0
+
+        # Verify results were returned correctly
+        assert len(results) == 2
+        assert results[0]["CV Name"] == "sample.pdf"
+        assert results[1]["CV Name"] == "sample.docx"
+
+
+def test_display_results(mock_streamlit, mock_api_response):
+    """Test display of analysis results."""
+    # Sample results
+    results = [
         {
-            "CV Name": "candidate1.pdf",
-            "Analysis": "Analysis for candidate 1 with 75% match",
-            "Thread ID": "thread_123",
-            "Message ID": "msg_456"
+            "CV Name": "sample1.pdf",
+            "Analysis": mock_api_response["agent_response"],
+            "Thread ID": "thread-1",
+            "Message ID": "message-1"
         },
         {
-            "CV Name": "candidate2.docx",
-            "Analysis": "Analysis for candidate 2 with 88% match",
-            "Thread ID": "thread_789",
-            "Message ID": "msg_012"
+            "CV Name": "sample2.pdf",
+            "Analysis": mock_api_response["agent_response"],
+            "Thread ID": "thread-2",
+            "Message ID": "message-2"
         }
     ]
 
-    # Configure mocks
-    mock_to_csv.return_value = "mocked,csv,content"
+    with patch('streamlit.header') as mock_header, \
+            patch('streamlit.tabs', return_value=[MagicMock(), MagicMock()]) as mock_tabs, \
+            patch('streamlit.subheader') as mock_subheader, \
+            patch('streamlit.markdown') as mock_markdown, \
+            patch('ui.components.display_feedback_buttons') as mock_display_feedback:
 
-    # Verify DataFrame conversion can be called
-    df = pd.DataFrame(st.session_state['results'])
-    csv_data = df.to_csv(index=False)
+        # Call the function
+        display_results(results)
 
-    # Verify to_csv was called
-    mock_to_csv.assert_called_once()
+        # Verify the header was displayed
+        mock_header.assert_called_once_with("Analysis Results")
 
+        # Verify tabs were created for each CV
+        mock_tabs.assert_called_once()
+        args, kwargs = mock_tabs.call_args
+        assert args[0] == ["sample1.pdf", "sample2.pdf"]
 
-def test_re_search_mock():
-    """Test that re.search mocking works correctly."""
-    # Mock re.search to test score extraction pattern works
-    with patch('re.search') as mock_re_search:
-        mock_re_search.side_effect = [
-            Mock(group=lambda x: "75"),
-            Mock(group=lambda x: "88"),
-            None
-        ]
-
-        # Simple test data
-        texts = [
-            "Analysis with 75% match",
-            "Analysis with 88% match",
-            "Analysis with no percentage"
-        ]
-
-        # Extract percentages
-        results = []
-        for text in texts:
-            match = mock_re_search(r'(\d+)%', text)
-            if match:
-                results.append(int(match.group(1)))
-            else:
-                results.append(None)
-
-        # Verify extraction worked
-        assert results == [75, 88, None]
+        # Verify feedback buttons were displayed
+        assert mock_display_feedback.call_count == 2
 
 
-@patch('app.APIClient.submit_feedback')
-def test_feedback_submission_direct(mock_submit_feedback, mock_env_vars):
-    """Test feedback submission functionality directly."""
-    # Configure mocks
-    mock_submit_feedback.return_value = {
-        "message": "Feedback submitted successfully"
-    }
+def test_render_sidebar(mock_streamlit):
+    """Test rendering of the sidebar."""
+    with patch('streamlit.sidebar.header') as mock_header, \
+            patch('streamlit.sidebar.file_uploader', return_value=[MagicMock()]) as mock_uploader, \
+            patch('streamlit.sidebar.markdown') as mock_markdown, \
+            patch('streamlit.sidebar.text') as mock_text, \
+            patch('streamlit.sidebar.button', return_value=True) as mock_button:
 
-    # Call the API directly instead of through the UI
-    result = APIClient.submit_feedback("msg_456", "thread_123", True)
+        # Call the function
+        uploaded_files, process_button = render_sidebar()
 
-    # Verify API was called correctly
-    mock_submit_feedback.assert_called_once_with(
-        "msg_456", "thread_123", True
-    )
+        # Verify the header was displayed
+        mock_header.assert_called_once_with("Upload CVs")
 
-    # Verify result
-    assert result["message"] == "Feedback submitted successfully"
+        # Verify the file uploader was displayed
+        mock_uploader.assert_called()
 
+        # Verify the process button was displayed
+        mock_button.assert_called()
 
-def test_create_chat_with_correct_format(sample_cv_text, mock_env_vars):
-    """Test that create_chat formats the payload correctly."""
-    with patch('app.requests.post') as mock_post:
-        # Configure mock response
-        mock_response = Mock()
-        mock_response.json.return_value = {"agent_response": "Test response"}
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
-
-        # Call the method directly
-        APIClient.create_chat(sample_cv_text, identifier="test_id")
-
-        # Check that the call was made
-        mock_post.assert_called_once()
-
-        # Get the call arguments
-        call_args = mock_post.call_args
-
-        # Verify the format of the payload
-        json_payload = call_args[1]['json']
-        assert "user_prompt" in json_payload
-
-        # The user_prompt is a JSON string
-        user_prompt_data = json.loads(json_payload["user_prompt"])
-        assert "identifier" in user_prompt_data
-        assert user_prompt_data["identifier"] == "test_id"
-        assert "Page_1" in user_prompt_data
-        assert sample_cv_text in user_prompt_data["Page_1"]
+        # Verify return values
+        assert len(uploaded_files) == 1
+        assert process_button is True

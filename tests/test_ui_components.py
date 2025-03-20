@@ -1,130 +1,154 @@
 """
-Tests for UI components and Streamlit interactions.
+Tests for UI components and utilities.
 """
+
 import pytest
-from unittest.mock import patch, Mock, MagicMock
-import pandas as pd
 import base64
-import re
-
-# Import functions from app.py
-from app import create_download_link, APIClient
-
-
-class MockElement:
-    """A simple mock for Streamlit UI elements."""
-
-    def __init__(self):
-        self.value = None
-        self.button_value = False
-        self.text_value = ""
-        self.dataframe_value = None
-        self.markdown_value = None
-        self.metric_value = None
-        self.title_value = None
-        self.error_value = None
-        self.success_value = None
-        self.tabs = []
-
-    def button(self, text, key=None, type=None):
-        self.button_value = text
-        return self.button_value
-
-    def text(self, text):
-        self.text_value = text
-        return self
-
-    def markdown(self, text):
-        self.markdown_value = text
-        return self
-
-    def metric(self, label, value):
-        self.metric_value = (label, value)
-        return self
-
-    def error(self, text):
-        self.error_value = text
-        return self
-
-    def success(self, text):
-        self.success_value = text
-        return self
+from unittest.mock import patch, MagicMock
+from ui.components import create_download_link, process_api_response, display_feedback_buttons
 
 
 def test_create_download_link():
-    """Test the create_download_link function."""
-    # Test with a simple string
-    content = "Test content for download"
-    filename = "test.txt"
-    link_text = "Download Test"
+    """Test creation of a download link."""
+    # Call the function
+    result = create_download_link(
+        content="Test content",
+        filename="test.txt",
+        text="Download Test"
+    )
 
-    result = create_download_link(content, filename, link_text)
+    # Encode content for comparison
+    b64 = base64.b64encode("Test content".encode()).decode()
+    expected = f'<a href="data:file/txt;base64,{b64}" download="test.txt">Download Test</a>'
 
-    # Verify the result is a string containing an HTML link
-    assert "<a href=" in result
-    assert f'download="{filename}"' in result
-    assert link_text in result
-
-    # Verify the base64 encoding works
-    encoded_content = base64.b64encode(content.encode()).decode()
-    assert encoded_content in result
+    # Verify the link was created correctly
+    assert result == expected
 
 
-@patch('app.main')
-def test_main_entry_point(mock_main):
-    """Test the entry point of the application."""
-    # We import __name__ == "__main__" block
-    import app
+def test_process_api_response_successful():
+    """Test processing a successful API response."""
+    # Create a sample response
+    response_data = {
+        "agent_response": "Analysis result"
+    }
 
-    # This should call main() if __name__ == "__main__"
-    # Let's simulate that
-    if hasattr(app, '__name__'):
-        old_name = app.__name__
-        app.__name__ = "__main__"
-        # Run the relevant code
-        app.main()
-        # Reset the name
-        app.__name__ = old_name
+    # Call the function
+    result = process_api_response(response_data)
 
-    # Verify main() was called
-    mock_main.assert_called_once()
+    # Verify the result
+    assert result == "Analysis result"
 
 
-@patch('app.requests.put')
-def test_feedback_buttons(mock_put):
-    """Test the feedback button functionality by directly calling the API client method."""
-    # Configure the mock response
-    mock_response = Mock()
-    mock_response.json.return_value = {
-        "message": "Feedback submitted successfully"}
-    mock_response.raise_for_status.return_value = None
-    mock_put.return_value = mock_response
+def test_process_api_response_missing_response():
+    """Test processing an API response with missing agent_response."""
+    # Create a sample response
+    response_data = {
+        "status": "success",
+        # No agent_response
+    }
 
-    # Test direct API client calls instead of via UI
-    # Simulate positive feedback
-    APIClient.submit_feedback("msg_test456", "thread_test123", True)
+    # Call the function
+    result = process_api_response(response_data)
 
-    # Verify the API call
-    mock_put.assert_called_once()
-    call_args = mock_put.call_args
-    payload = call_args[1]['json']
-    assert payload["thread_id"] == "thread_test123"
-    assert payload["message_id"] == "msg_test456"
-    assert payload["positive_feedback"] is True
+    # Verify the result
+    assert result == "Analysis failed to retrieve a response"
 
-    # Reset the mock
-    mock_put.reset_mock()
 
-    # Reconfigure the mock response
-    mock_put.return_value = mock_response
+def test_process_api_response_error():
+    """Test error handling in process_api_response."""
+    # Create a sample response that will cause an error
+    response_data = None
 
-    # Simulate negative feedback
-    APIClient.submit_feedback("msg_test456", "thread_test123", False)
+    # Call the function with error patching
+    with patch('streamlit.error') as mock_error:
+        result = process_api_response(response_data)
 
-    # Verify the API call
-    mock_put.assert_called_once()
-    call_args = mock_put.call_args
-    payload = call_args[1]['json']
-    assert payload["thread_id"] == "thread_test123"
-    assert payload["message_id"] == "msg_test456"
-    assert payload["positive_feedback"] is False
+        # Verify error was displayed
+        mock_error.assert_called_once()
+        assert "Error processing API response" in mock_error.call_args[0][0]
+
+        # Verify the result contains the error message
+        assert "Error processing analysis" in result
+
+
+def test_display_feedback_buttons_positive(mock_feedback_response):
+    """Test display of positive feedback button."""
+    # Create a sample result
+    result = {
+        "Message ID": "sample-message-id",
+        "Thread ID": "sample-thread-id"
+    }
+
+    # Setup mocks for positive feedback
+    with patch('streamlit.columns', return_value=[MagicMock(), MagicMock()]) as mock_columns, \
+            patch.object(MagicMock, 'button', side_effect=[True, False]) as mock_button, \
+            patch('streamlit.success') as mock_success, \
+            patch('services.APIClient.submit_feedback', return_value=mock_feedback_response) as mock_submit_feedback:
+
+        # Call the function
+        display_feedback_buttons(result, 0)
+
+        # Verify the feedback was submitted
+        mock_submit_feedback.assert_called_once_with(
+            "sample-message-id",
+            "sample-thread-id",
+            True
+        )
+
+        # Verify success message was displayed
+        mock_success.assert_called_once()
+        assert "Thank you for your feedback!" in mock_success.call_args[0][0]
+
+
+def test_display_feedback_buttons_negative(mock_feedback_response):
+    """Test display of negative feedback button."""
+    # Create a sample result
+    result = {
+        "Message ID": "sample-message-id",
+        "Thread ID": "sample-thread-id"
+    }
+
+    # Setup mocks for negative feedback
+    with patch('streamlit.columns', return_value=[MagicMock(), MagicMock()]) as mock_columns, \
+            patch.object(MagicMock, 'button', side_effect=[False, True]) as mock_button, \
+            patch('streamlit.success') as mock_success, \
+            patch('services.APIClient.submit_feedback', return_value=mock_feedback_response) as mock_submit_feedback:
+
+        # Call the function
+        display_feedback_buttons(result, 0)
+
+        # Verify the feedback was submitted
+        mock_submit_feedback.assert_called_once_with(
+            "sample-message-id",
+            "sample-thread-id",
+            False
+        )
+
+        # Verify success message was displayed
+        mock_success.assert_called_once()
+        assert "Thank you for your feedback. We'll improve our analysis." in mock_success.call_args[
+            0][0]
+
+
+def test_display_feedback_buttons_no_click():
+    """Test when no feedback button is clicked."""
+    # Create a sample result
+    result = {
+        "Message ID": "sample-message-id",
+        "Thread ID": "sample-thread-id"
+    }
+
+    # Setup mocks with no button clicks
+    with patch('streamlit.columns', return_value=[MagicMock(), MagicMock()]) as mock_columns, \
+            patch.object(MagicMock, 'button', return_value=False) as mock_button, \
+            patch('streamlit.success') as mock_success, \
+            patch('services.APIClient.submit_feedback') as mock_submit_feedback:
+
+        # Call the function
+        display_feedback_buttons(result, 0)
+
+        # Verify the feedback was not submitted
+        mock_submit_feedback.assert_not_called()
+
+        # Verify no success message was displayed
+        mock_success.assert_not_called()
