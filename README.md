@@ -6,16 +6,16 @@ A Streamlit-based application that analyzes multiple CV/resume documents using a
 
 ## Overview
 
-The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recruiters and hiring managers efficiently evaluate multiple candidate CVs against job requirements. The application provides a user-friendly interface for uploading documents and reviewing analysis results with visual comparisons.
+The CV Analysis Tool interfaces with an Azure-hosted FastAgent API and Azure OpenAI to help recruiters and hiring managers efficiently evaluate multiple candidate CVs against job requirements. The application provides a user-friendly interface for uploading documents and reviewing analysis results with visual comparisons and AI-powered insights.
 
 ### Key Features
 
 - **Multi-CV Upload**: Support for PDF, DOCX, and TXT file formats
 - **AI-Powered Analysis**: Detailed evaluation using a sophisticated AI analysis engine
-- **Smart Response Formatting**: Clean, readable presentation of AI analysis results
+- **Structured Response Format**: Clearly organized analysis with scorecards and evaluation metrics
 - **Individual Analysis**: Comprehensive breakdown of each CV against predefined criteria
-- **Match Scoring**: Visual representation of how well each candidate matches requirements
-- **Comparative Summary**: At-a-glance view of all candidates' match percentages
+- **Match Scoring**: Numerical scoring system showing how well each candidate matches requirements
+- **Automatic Comparative Summary**: AI-generated comparison of all candidates using Azure OpenAI GPT-4o mini
 - **Feedback System**: Rate the quality of analysis to improve future results
 - **Export Functionality**: Download analysis results in CSV format
 - **Reset Capability**: Clear results and analyze new CVs without restarting
@@ -26,6 +26,7 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
 
 - Python 3.8+
 - Azure FastAPI endpoint credentials (username and password)
+- Azure OpenAI API access with GPT-4o mini deployment
 
 ### Installation
 
@@ -45,9 +46,13 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
    API_PASSWORD=your_password_here
    API_BASE_URL=https://hr-demo-app.ambitiousriver-e696f55c.australiaeast.azurecontainerapps.io/api/v1
    REVISION_ID=5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b
+   AZURE_BLOB_STORAGE_URL=https://storageaccount.blob.core.windows.net/container/blob?sastoken
+   AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
+   AZURE_OPENAI_KEY=your_api_key_here
+   AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-mini
    ```
 
-   Replace `your_username_here` and `your_password_here` with your actual API credentials.
+   Replace placeholder values with your actual API credentials.
 
 3. **Install Python dependencies**
 
@@ -77,8 +82,6 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
    start_app.bat
    ```
 
-   The startup scripts will check for the existence of the virtual environment and `.env` file, creating them if necessary.
-
 5. **Access the application**
 
    Open your browser and navigate to `http://localhost:8501`
@@ -89,122 +92,72 @@ The CV Analysis Tool interfaces with an Azure-hosted FastAgent API to help recru
 2. **Run Analysis**: Click the "Analyze CVs" button to process all documents
 3. **Review Results**:
    - Navigate between individual tabs to see detailed analysis for each CV
-   - View formatted analysis reports with skills assessments and recommendations
-   - See visual score representations with progress bars
-   - Use the summary table to compare all candidates side by side
-   - Look for highlighted match percentages to identify top candidates
-   - Provide feedback using the thumbs up/down buttons
+   - View structured analysis reports with scorecards and evaluations
+   - Each CV analysis includes position fit assessment, qualification scores, and detailed feedback
+   - See the "Comparative Summary" tab for an AI-generated comparison of all candidates
+   - Review the automatically generated insights highlighting strongest candidates and key comparisons
+   - Provide feedback using the thumbs up/down buttons for individual analyses
 4. **Export Data**: Download results as CSV for further processing or sharing
 5. **Reset and Restart**: Use the "Clear Results" button to analyze a new set of CVs
+
+## Analysis Structure
+
+Each CV analysis includes:
+
+- **Analysis**: Concise summary of the candidate's suitability for the position
+- **Scorecard**: Table showing position requirements versus candidate qualifications with numerical scores (out of 10)
+- **Overall Evaluation**: Comprehensive assessment of the candidate's fit
+- **Evaluation Report**: Structured review with detailed sections:
+  - Overall Summary
+  - Detailed Evaluation (with categorized points)
+  - Criteria Scoring (using 1-5 scale)
+  - Recommendation
+
+The **Comparative Summary** tab provides:
+
+- Side-by-side comparison of all candidates
+- Highlighted strengths and weaknesses across candidates
+- Ranking of candidates based on overall suitability
+- Key differentiating factors between candidates
 
 ## Project Structure
 
 - **app.py**: Main Streamlit application file containing the UI and API integration logic
-- **.env**: Environment variables file with API credentials (not checked into version control)
-- **requirements.txt**: Python dependencies for the project including python-dotenv
-- **.gitignore**: Specifies files to exclude from version control (includes .env)
-- **start_app.sh**: Bash script to start the Streamlit app with environment setup
-- **start_app.bat**: Windows batch file to start the Streamlit app with environment setup
-- **tests/**: Directory containing test files
-
-### Component Breakdown
-
-#### APIClient Class
-
-Handles all interactions with the FastAgent API, including:
-
-- Submitting CVs for analysis with proper authentication
-- Formatting payloads according to API requirements
-- Sending user feedback on analysis quality
-- Error handling for API requests
-
-#### Text Extraction Functions
-
-Utilities that handle various document formats:
-
-- `extract_text_from_file()`: Detects file type and routes to appropriate extractor
-- `extract_text_from_pdf()`: Processes PDF documents using PyPDF2
-- `extract_text_from_docx()`: Extracts text from Word documents using docx2txt
-
-#### Response Formatting
-
-Smart response processing to ensure readable output:
-
-- JSON parsing to extract the relevant analysis sections
-- Extraction of scores from different text formats
-- Multiple fallback options to handle various response structures
-- Conversion of raw scores to visual progress indicators
-
-#### UI Components
-
-The application is divided into:
-
-- Sidebar for input controls and application information
-- Tab-based interface for individual CV analysis
-- Summary table for at-a-glance comparison
-- Feedback mechanisms for continuous improvement
-- Progress indicators during analysis
-- Reset functionality to analyze new CVs
-
-## Testing
-
-The application includes a comprehensive test suite that ensures all components work correctly:
-
-- **Unit Tests**: Test individual functions and classes in isolation
-
-  - `test_api_client.py`: Tests the API client functionality and API interactions
-  - `test_text_extraction.py`: Tests document text extraction functions
-  - `test_ui_components.py`: Tests UI components and interactions
-
-- **Integration Tests**: Test how components work together
-  - `test_app_flow.py`: Tests the end-to-end application flow
-
-To run the tests:
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test modules
-pytest tests/test_api_client.py
-pytest tests/test_text_extraction.py
-pytest tests/test_ui_components.py
-pytest tests/integration/test_app_flow.py
-
-# Run tests with coverage report
-pytest --cov=app
-```
+- **config.py**: Configuration settings and environment variable handling
+- **services/**: Directory containing API clients and service integrations
+  - **api_client.py**: FastAgent API client for CV analysis
+  - **openai_client.py**: Azure OpenAI client for comparative summaries
+  - **blob_storage.py**: Azure Blob storage client
+  - **text_extraction.py**: Document text extraction utilities
+- **ui/**: Directory containing UI components and pages
+  - **main_page.py**: Main page UI logic and results display
+  - **sidebar.py**: Sidebar UI components and interactions
+  - **components.py**: Reusable UI components
+- **utils/**: Directory containing utility functions
+- **start_app.sh/start_app.bat**: Startup scripts for Linux/macOS and Windows
 
 ## API Integration
 
-The application interacts with the following Azure-hosted API endpoints:
+The application integrates with two main API services:
 
-- `POST /api/v1/chat`: Submit CVs for analysis (Basic authentication required)
-- `PUT /api/v1/messages/{message_id}/feedback`: Submit feedback on analysis quality
+1. **FastAgent API**: Analyzes individual CVs against job requirements
 
-## Security Notes
+   - `POST /api/v1/chat`: Submit CVs for analysis (Basic authentication required)
+   - `PUT /api/v1/messages/{message_id}/feedback`: Submit feedback on analysis quality
 
-- API credentials are stored in the `.env` file which is not committed to version control
-- The application uses HTTP Basic Authentication for API requests
-- Ensure your `.env` file is properly secured and not shared publicly
+2. **Azure OpenAI API**: Generates comparative summaries of all candidates
+   - Uses the GPT-4o mini model to compare multiple CV analyses
+   - Produces comprehensive candidate comparisons and recommendations
 
-## Configuration Options
+## Configuration
 
-- Modify the environment variables in the `.env` file to connect to a different server or use different credentials
-- Extend `extract_text_from_file()` to support additional document formats
-- Adjust the UI layout by modifying the Streamlit component structure
+- **FastAgent API**: Configure API endpoint, username, and password in the `.env` file
+- **Azure OpenAI**: Set your endpoint, API key, and deployment name in the `.env` file
+- **Azure Blob Storage**: Configure blob storage URL with SAS token for job criteria updates
 
 ## Important Notes
 
-- This application uses a predefined set of evaluation criteria configured in the API
-- The current implementation is designed to work with a specific revision ID in the FastAgent API
-- If you need to make changes to the criteria or use a different revision ID, update the values in your `.env` file
-- The "Clear Results" button allows you to analyze new CVs without restarting the application
-
-## Recent Improvements
-
-- **Smart Response Formatting**: Analysis results are now cleanly formatted rather than displaying raw JSON data
-- **Enhanced Score Visualization**: Multiple methods for extracting and displaying scores from AI analysis
-- **Reset Functionality**: Added ability to clear results and analyze new CVs without restarting
-- **Improved Error Handling**: Better feedback and recovery from API errors
-- **Enhanced UI**: More informative explanations and progress indicators
+- The comparative summary feature requires valid Azure OpenAI API credentials
+- The app will automatically generate the summary when analyses are complete
+- You can regenerate the comparative summary at any time with the "Regenerate Summary" button
+- For best results, ensure all CVs are for positions with similar requirements

@@ -21,6 +21,12 @@ DEFAULT_REVISION_ID = os.getenv(
 # Azure Blob Storage Configuration
 AZURE_BLOB_STORAGE_URL = os.getenv("AZURE_BLOB_STORAGE_URL", "")
 
+# Azure OpenAI API Configuration
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY", "")
+AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv(
+    "AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o-mini")
+
 # Streamlit page configuration
 
 

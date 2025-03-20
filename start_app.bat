@@ -21,8 +21,12 @@ if not exist .env (
     echo REVISION_ID=5ccc4a42-1e24-4b82-a550-e7e9c6ffa48b>> .env
     echo # Add your full Azure Blob Storage URL with SAS token>> .env
     echo AZURE_BLOB_STORAGE_URL=https://storageaccount.blob.core.windows.net/container/blob?sastoken>> .env
+    echo # Azure OpenAI API settings>> .env
+    echo AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com>> .env
+    echo AZURE_OPENAI_KEY=your_api_key_here>> .env
+    echo AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-mini>> .env
     echo Please edit the .env file with your actual credentials before proceeding.
-    echo Especially ensure the AZURE_BLOB_STORAGE_URL is provided for job criteria updates.
+    echo Especially ensure the Azure OpenAI API credentials are provided for CV comparison summary.
     exit /b
 )
 

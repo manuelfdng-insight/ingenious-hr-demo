@@ -68,17 +68,21 @@ def render_sidebar():
     # Note about the application
     st.sidebar.subheader("About This Application")
     st.sidebar.text(
-        "This application analyzes CVs using a sophisticated AI model. "
-        "Upload your CVs to receive a detailed evaluation, including skills assessment, "
-        "experience analysis, and overall match score."
+        "This application analyzes CVs using an AI model, "
+        "providing comprehensive evaluations with scorecards, "
+        "detailed assessments, and comparative summaries. "
+        "It delivers structured insights including position fit, "
+        "candidate qualification scores, and specific recommendations."
     )
 
     # Note about criteria
     st.sidebar.subheader("Evaluation Criteria")
     st.sidebar.text(
-        "This application uses a predefined set of evaluation criteria "
-        "configured in the API. You can update these criteria by uploading "
-        "a job description document in the Job Criteria Configuration section."
+        "Each CV is evaluated against position requirements "
+        "with numerical scoring and detailed feedback across "
+        "key categories. The comparative summary tab uses "
+        "Azure OpenAI to provide side-by-side candidate "
+        "comparisons to help with hiring decisions."
     )
 
     # Process button
