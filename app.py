@@ -107,10 +107,18 @@ class AzureBlobClient:
         self.sas_token = AZURE_BLOB_SAS_TOKEN
         self.container_name = AZURE_BLOB_CONTAINER
 
+        # Check if SAS token is available
+        if not self.sas_token:
+            raise ValueError(
+                "AZURE_BLOB_SAS_TOKEN environment variable is not set or is empty")
+
         # Create the BlobServiceClient object
-        self.blob_service_client = BlobServiceClient(
-            account_url=f"{self.account_url}?{self.sas_token}"
-        )
+        try:
+            self.blob_service_client = BlobServiceClient(
+                account_url=f"{self.account_url}?{self.sas_token}"
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to create BlobServiceClient: {str(e)}")
 
     def upload_blob(self, content: str, blob_name: str, content_type: str = "application/json") -> bool:
         """Upload content to Azure Blob Storage."""
@@ -195,64 +203,42 @@ def create_download_link(content, filename, text):
 
 
 def convert_text_to_job_criteria_json(text: str) -> Dict[str, Any]:
-    """Convert extracted text from document to job criteria JSON format.
+    """Convert extracted text from document to a simple job criteria JSON format.
 
-    This is a simplified implementation that extracts key job criteria.
-    In a production environment, you might want to use a more sophisticated
-    approach, possibly involving LLMs or custom parsing logic.
+    This just takes the extracted text and places it in one string value in the JSON,
+    without attempting to parse specific fields.
     """
-    # Simple extraction of common job criteria sections
+    # Simple conversion to a JSON object with a single text field
     criteria = {
-        "position_title": "",
-        "department": "",
-        "required_skills": [],
-        "preferred_skills": [],
-        "experience_years": 0,
-        "education": "",
-        "job_description": text[:500]  # Truncate for brevity
+        "job_criteria_text": text
     }
-
-    # Extract position title (look for common patterns)
-    title_match = re.search(
-        r'(?:Position|Job Title|Role):\s*([^\n]+)', text, re.IGNORECASE)
-    if title_match:
-        criteria["position_title"] = title_match.group(1).strip()
-
-    # Extract required skills (look for bullet points after "Required Skills" section)
-    skills_section = re.search(
-        r'Required Skills[:\s]*(.+?)(?:\n\n|\n[A-Z])', text, re.DOTALL | re.IGNORECASE)
-    if skills_section:
-        skills_text = skills_section.group(1)
-        # Extract bullet points or comma-separated lists
-        skills = re.findall(r'[•\-*]\s*([^\n•\-*]+)', skills_text)
-        if not skills:  # Try comma separation if bullets not found
-            skills = [s.strip() for s in skills_text.split(',')]
-        criteria["required_skills"] = [s.strip() for s in skills if s.strip()]
-
-    # Extract years of experience
-    exp_match = re.search(
-        r'(\d+)(?:\+)?\s*(?:years|yrs).*?experience', text, re.IGNORECASE)
-    if exp_match:
-        criteria["experience_years"] = int(exp_match.group(1))
-
-    # Extract education requirements
-    edu_match = re.search(
-        r'(?:Education|Qualification)[:\s]*([^\n]+)', text, re.IGNORECASE)
-    if edu_match:
-        criteria["education"] = edu_match.group(1).strip()
 
     return criteria
 
 
 def update_job_criteria_in_azure(job_criteria: Dict[str, Any]) -> bool:
     """Update the job_criteria.json file in Azure Blob Storage."""
-    blob_client = AzureBlobClient()
+    try:
+        # Check if SAS token is provided
+        if not AZURE_BLOB_SAS_TOKEN:
+            st.error(
+                "Azure Blob SAS token is missing. Please add it to your .env file.")
+            return False
 
-    # Convert the job criteria to JSON
-    job_criteria_json = json.dumps(job_criteria, indent=2)
+        # Initialize the blob client
+        blob_client = AzureBlobClient()
 
-    # Upload to Azure Blob Storage
-    return blob_client.upload_blob(job_criteria_json, "job_criteria.json")
+        # Convert the job criteria to JSON
+        job_criteria_json = json.dumps(job_criteria, indent=2)
+
+        # Upload to Azure Blob Storage
+        return blob_client.upload_blob(job_criteria_json, "job_criteria.json")
+    except ValueError as e:
+        st.error(f"Azure Blob Storage configuration error: {str(e)}")
+        return False
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
+        return False
 
 
 def main():
@@ -270,44 +256,46 @@ def main():
         )
 
         # Job Criteria Configuration Section
-        with st.expander("⚙️ Job Criteria Configuration", expanded=False):
-            st.markdown("""
-            **Update Job Criteria**
-            
-            Upload a job description document to update the criteria used for evaluating CVs.
-            """)
+        st.markdown("### ⚙️ Job Criteria Configuration")
+        st.markdown("""
+        **Update Job Criteria**
+        
+        Upload a job description document to update the criteria used for evaluating CVs.
+        """)
 
-            job_criteria_file = st.file_uploader(
-                "Upload Job Criteria Document (PDF, DOCX)",
-                type=["pdf", "docx"],
-                key="job_criteria_file"
-            )
+        job_criteria_file = st.file_uploader(
+            "Upload Job Criteria Document (PDF, DOCX)",
+            type=["pdf", "docx"],
+            key="job_criteria_file"
+        )
 
-            if job_criteria_file:
-                # Extract text from the uploaded file
-                job_text = extract_text_from_file(job_criteria_file)
+        if job_criteria_file:
+            # Extract text from the uploaded file
+            job_text = extract_text_from_file(job_criteria_file)
 
-                # Preview the extracted text
-                with st.expander("Preview Extracted Text", expanded=False):
-                    st.text_area("Extracted Text", job_text, height=200)
+            # Setup tabs for previewing content
+            preview_tabs = st.tabs(["Extracted Text", "Generated JSON"])
 
-                # Convert to JSON
-                job_criteria = convert_text_to_job_criteria_json(job_text)
+            with preview_tabs[0]:
+                st.text_area("Extracted Text from Document",
+                             job_text, height=200)
 
-                # Display the JSON
-                with st.expander("Preview Generated JSON", expanded=False):
-                    st.json(job_criteria)
+            # Convert to JSON
+            job_criteria = convert_text_to_job_criteria_json(job_text)
 
-                # Update button
-                if st.button("Update Job Criteria", key="update_criteria"):
-                    with st.spinner("Updating job criteria..."):
-                        if update_job_criteria_in_azure(job_criteria):
-                            st.success("Job criteria updated successfully!")
-                        else:
-                            st.error(
-                                "Failed to update job criteria. Check logs for details.")
+            with preview_tabs[1]:
+                st.json(job_criteria)
 
-            st.markdown("---")
+            # Update button
+            if st.button("Update Job Criteria", key="update_criteria"):
+                with st.spinner("Updating job criteria..."):
+                    if update_job_criteria_in_azure(job_criteria):
+                        st.success("Job criteria updated successfully!")
+                    else:
+                        st.error(
+                            "Failed to update job criteria. Check logs for details.")
+
+        st.markdown("---")
 
         # Note about the application
         st.subheader("About This Application")
