@@ -10,9 +10,9 @@ import pypdf
 
 def extract_text_from_file(uploaded_file) -> str:
     """Extract text content from various file types."""
-    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-
     try:
+        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+
         if file_extension == ".pdf":
             return extract_text_from_pdf(uploaded_file)
         elif file_extension == ".docx":

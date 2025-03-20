@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
 from config import AZURE_BLOB_STORAGE_URL
+import os
 
 
 class AzureBlobClient:
